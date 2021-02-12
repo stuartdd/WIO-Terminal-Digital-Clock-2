@@ -26,18 +26,6 @@
 #define ICON_WIFI_X_POS 30
 #define ICON_WIFI_Y_POS 105
 
-const char* ntpServerName = "time.nist.gov";
-const int offsets[]{3, 0, -5, 3};
-const int logBgColor = dispBuffer.color565(0, 0, 255);
-const int logFgColor = dispBuffer.color565(255, 255, 255);
-const int bgColor = dispBuffer.color565(0, 0, 0);
-const int segOffFgColor = dispBuffer.color565(0, 0, 50);
-const int fgColorHi = dispBuffer.color565(0, 150, 0);
-const int fgColorLo = dispBuffer.color565(0, 100, 0);
-const int iconBusyColor = dispBuffer.color565(255, 255, 0);
-const int iconConnectColor = dispBuffer.color565(0, 0, 150);
-const int iconFailColor = dispBuffer.color565(255, 0, 0);
-
 enum DisplayModes {
     DM_CLOCK,     // Primary display mode is the CLOCK
     DM_LOG,       // Primary display mode is the LOG
@@ -54,6 +42,18 @@ static Properties properties = Properties();
 static ClockDisplaySmall segSmallHHMM = ClockDisplaySmall();
 static ClockDisplaySmall segSmallSS = ClockDisplaySmall();
 static IconManager wifiIcon = IconManager();
+
+const char* ntpServerName = "time.nist.gov";
+const int offsets[]{3, 0, -5, 3};
+const int logBgColor = dispBuffer.color565(0, 0, 255);
+const int logFgColor = dispBuffer.color565(255, 255, 255);
+const int bgColor = dispBuffer.color565(0, 0, 0);
+const int segOffFgColor = dispBuffer.color565(0, 0, 50);
+const int fgColorHi = dispBuffer.color565(0, 150, 0);
+const int fgColorLo = dispBuffer.color565(0, 100, 0);
+const int iconBusyColor = dispBuffer.color565(255, 255, 0);
+const int iconConnectColor = dispBuffer.color565(0, 0, 150);
+const int iconFailColor = dispBuffer.color565(255, 0, 0);
 
 long millisNow = 0;
 long timerSyncTime = 0;
