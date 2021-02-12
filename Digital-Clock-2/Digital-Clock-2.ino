@@ -24,7 +24,19 @@
 #define TIME_SYNC_TIME 3600000
 
 #define ICON_WIFI_X_POS 30
-#define ICON_WIFI_Y_POS 100
+#define ICON_WIFI_Y_POS 105
+
+const char* ntpServerName = "time.nist.gov";
+const int offsets[]{3, 0, -5, 3};
+const int logBgColor = dispBuffer.color565(0, 0, 255);
+const int logFgColor = dispBuffer.color565(255, 255, 255);
+const int bgColor = dispBuffer.color565(0, 0, 0);
+const int segOffFgColor = dispBuffer.color565(0, 0, 50);
+const int fgColorHi = dispBuffer.color565(0, 150, 0);
+const int fgColorLo = dispBuffer.color565(0, 100, 0);
+const int iconBusyColor = dispBuffer.color565(255, 255, 0);
+const int iconConnectColor = dispBuffer.color565(0, 0, 150);
+const int iconFailColor = dispBuffer.color565(255, 0, 0);
 
 enum DisplayModes {
     DM_CLOCK,     // Primary display mode is the CLOCK
@@ -33,20 +45,6 @@ enum DisplayModes {
     DM_FAIL       // Primary display mode is the FAIL screen
 };
 static DisplayModes currentMode;
-
-long millisNow = 0;
-long timerSyncTime = 0;
-long timerOneSecond = 0;
-long timeButtonTest = 0;
-bool useNTPForTime = false;
-int syncTimeTimeout = SYNC_TIME_OUT_SHORT;
-bool lowLightDisplay = false;
-long mainLoopMillis = 0;
-long mainLoopStart = 0;
-long mainLooptemp = 0;
-
-const char* ntpServerName = "time.nist.gov";
-
 static TFT_eSPI dispBuffer;  // The screen (This should be a sprite but there is not enough memory)
 static TimeServer timeServer;
 static TimeStatus timeStatus;
@@ -57,33 +55,30 @@ static ClockDisplaySmall segSmallHHMM = ClockDisplaySmall();
 static ClockDisplaySmall segSmallSS = ClockDisplaySmall();
 static IconManager wifiIcon = IconManager();
 
-const int offsets[]{3, 0, -5, 3};
-int logBgColor = dispBuffer.color565(0, 0, 255);
-int logFgColor = dispBuffer.color565(255, 255, 255);
-
-int bgColor = dispBuffer.color565(0, 0, 0);
-int segOffFgColor = dispBuffer.color565(0, 0, 50);
-
-int fgColorHi = dispBuffer.color565(0, 150, 0);
-int fgColorLo = dispBuffer.color565(0, 100, 0);
-
-int iconBusyColor = dispBuffer.color565(255, 255, 0);
-int iconConnectColor = dispBuffer.color565(0, 0, 150);
-int iconFailColor = dispBuffer.color565(255, 0, 0);
-
+long millisNow = 0;
+long timerSyncTime = 0;
+long timerOneSecond = 0;
+long timeButtonTest = 0;
+long mainLoopMillis = 0;
+long mainLoopStart = 0;
+long mainLooptemp = 0;
+bool useNTPForTime = false;
+bool lowLightDisplay = false;
 bool colonOn = true;
+bool displayStats = true;
 bool buttonANotPressed = true;
 bool buttonBNotPressed = true;
+bool buttonCNotPressed = true;
 int count = 0;
 int currentDayOfWeek = -1;
 int currentClockColor = -1;
+int syncTimeTimeout = SYNC_TIME_OUT_SHORT;
+
 char message[50];
 char strTime[40];
 char ipStr[20];
 char ssid[40];      // Read from a file (FILE_SSID or FILE_SSID_ALT) on the sd card.
 char password[40];  // Read from a file (FILE_PW or FILE_PW_ALT) on the sd card.
-
-bool colour1 = true;
 
 void setup() {
     //
@@ -215,7 +210,7 @@ void setup() {
     // Init the seven segment displays
     //
     segSmallHHMM.init(dispBuffer, 10, 10, getClockColor(), segOffFgColor, 5, offsets);
-    segSmallSS.init(dispBuffer, 115, 100, getClockColor(), segOffFgColor, 2, offsets);
+    segSmallSS.init(dispBuffer, 115, 105, getClockColor(), segOffFgColor, 2, offsets);
     wifiIcon.init(dispBuffer, wifi_icon_bits, ICON_WIFI_X_POS, ICON_WIFI_Y_POS, wifi_icon_width, wifi_icon_height, bgColor);
 
     int timeout = SAMCrashMonitor::enableWatchdog(15000);
@@ -240,11 +235,9 @@ void loop() {
 
     SAMCrashMonitor::iAmAlive();
     backLight.update();
-
     //
     // Call millis() once to get the time at the start of the loop.
     //
-
     if (millisNow > timeButtonTest) {
         //
         // Time to check those buttons
@@ -253,7 +246,11 @@ void loop() {
         if (digitalRead(WIO_KEY_A) == LOW) {
             if (buttonANotPressed) {
                 buttonANotPressed = false;
-                buttonAIsPressed();
+                if (currentMode == DM_CLOCK) {
+                    setDisplayMode(DM_LOG);
+                } else {
+                    setDisplayMode(DM_CLOCK);
+                }
             }
         } else {
             buttonANotPressed = true;
@@ -266,6 +263,17 @@ void loop() {
             }
         } else {
             buttonBNotPressed = true;
+        }
+
+        if (digitalRead(WIO_KEY_C) == LOW) {
+            if (buttonCNotPressed) {
+                buttonCNotPressed = false;
+                displayStats = !displayStats;
+                currentMode = DM_LOG;
+                setDisplayMode(DM_CLOCK);
+            }
+        } else {
+            buttonCNotPressed = true;
         }
     }
 
@@ -353,13 +361,14 @@ void loop() {
             if (currentDayOfWeek != timeStatus.dayOfWeek) {
                 currentDayOfWeek = timeStatus.dayOfWeek;
                 dispBuffer.setTextColor(currentClockColor, bgColor);
-                dispBuffer.drawString(timeStatus.getDayOfWeekStr(), 20, 190);
-                dispBuffer.drawString(timeStatus.getMonthStr(), 20, 230);
-                dispBuffer.drawString(timeStatus.getDayOfMonthStr(message), 100, 230);
+                dispBuffer.drawString(timeStatus.getDayOfWeekStr(), 20, 200);
+                dispBuffer.drawString(timeStatus.getMonthStr(), 20, 245);
+                dispBuffer.drawString(timeStatus.getDayOfMonthStr(message), 100, 245);
             }
-
-            dispBuffer.setTextColor(logFgColor, bgColor);
-            dispBuffer.drawString(String(backLight.getAverage()) + "," + String(mainLoopMillis) + "    ", 20, 280);
+            if (displayStats) {
+                dispBuffer.setTextColor(logFgColor, bgColor);
+                dispBuffer.drawString(fmt2(backLight.getAverage()) + "," + fmt3(mainLoopMillis) + "," + String((timerSyncTime - millis()) / 1000) + "    ", 5, 285);
+            }
         }
         if (currentMode == DM_LOG) {
             timeStatus.updateDateTime();
@@ -372,12 +381,21 @@ void loop() {
     }
 }  // END loop
 
-void buttonAIsPressed() {
-    if (currentMode == DM_CLOCK) {
-        setDisplayMode(DM_LOG);
-    } else {
-        setDisplayMode(DM_CLOCK);
+String fmt2(long num) {
+    if (num < 10) {
+        return String(num) + " ";
     }
+    return String(num);
+}
+
+String fmt3(long num) {
+    if (num < 10) {
+        return String(num) + "  ";
+    }
+    if (num < 100) {
+        return String(num) + "   ";
+    }
+    return String(num);
 }
 
 void setDisplayMode(DisplayModes newMode) {
