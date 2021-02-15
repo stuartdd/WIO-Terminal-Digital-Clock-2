@@ -170,11 +170,23 @@ const char *TimeStatus::getMessageStr(char *buffer) {
     return buffer;
 }
 
+bool TimeStatus::isDstOn() {
+    return dstState == DST_ON;
+}
+
+void TimeStatus::setDSTOverriden(bool active) {
+    overrideDST = active;
+}
+
+bool TimeStatus::isDSTOverriden() {
+    return overrideDST;
+}
+
 const byte *TimeStatus::updateDateTime() {
     long tim = 0;
     if (unixtimeFound) {
         tim = timeSecEpoch;
-        if (overrideDST || (dstState == DST_ON)) {
+        if (isDstOn() || isDSTOverriden()) {
             tim = (timeSecEpoch + SEC_IN_HOUR);
         }
         tim = tim + ((tZonePairs[tzOffset * 2] * SEC_IN_HOUR) + (tZonePairs[(tzOffset * 2) + 1] * SEC_IN_MIN));

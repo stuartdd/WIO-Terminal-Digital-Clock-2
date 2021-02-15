@@ -1,3 +1,6 @@
+#ifndef SEVEN_SEG_S_MAP_CPP__
+#define SEVEN_SEG_S_MAP_CPP__
+
 #include "TFT_eSPI.h"
 /*
 Relative offsets for each segment led (image).
@@ -20,11 +23,6 @@ Relative offsets for each segment led (image).
 #define SEG_S_8_Y 18
 
 /*
-sevenSegmentMap must be defined only ONCE
-*/
-#ifndef SEVEN_SEG_MAP_CPP__
-#define SEVEN_SEG_MAP_CPP__
-/*
    ---0x01---
    |        |
    0x20  0x02
@@ -38,7 +36,6 @@ sevenSegmentMap must be defined only ONCE
 const unsigned int sevenSegmentMap[] = {0x3F, 0x06, 0x5B, 0x4f, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x77, 0x7C, 0x58, 0x5E, 0x79, 0x71};
 #define SEVEN_SEG_MAP_MAX 16
 #define SEVEN_SEG_MAP_ERR 0x40
-#endif
 
 #define SEG_S_1_width 32
 #define SEG_S_1_height 8
@@ -180,3 +177,4 @@ public:
 
     bool setColon(int pos, bool val);
 };
+#endif

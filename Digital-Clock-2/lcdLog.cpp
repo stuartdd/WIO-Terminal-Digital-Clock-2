@@ -22,9 +22,6 @@
  * @file lcdLog.cpp
 */
 
-#ifndef WIO_LOG_CPP__
-#define WIO_LOG_CPP__
-
 #include "lcdLog.h"
 
 static TFT_eSPI log_tft;
@@ -186,5 +183,3 @@ void Logger::_logLine(String mess, bool advance) {
         display();
     }
 }
-
-#endif

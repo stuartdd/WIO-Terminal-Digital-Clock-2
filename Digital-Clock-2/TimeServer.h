@@ -1,3 +1,6 @@
+#ifndef __WIO_TIME_SERVER_CPP__
+#define __WIO_TIME_SERVER_CPP__
+
 #include "DateTime.h"
 #include "rpcWiFi.h"
 #define TIME_DATA_URL_CONST "/api/ip.txt"
@@ -75,6 +78,7 @@ private:
     const char *getDstStr(DSTState ts);
     const char *getDayOfMonthSuffix(int dom);
     int tzOffset;
+    bool overrideDST;
 
 public:
     TimeStatus();
@@ -84,7 +88,7 @@ public:
     TimeSource timeSource;
     TimeSource errorSource;
     int timeout;
-    bool overrideDST;
+
     int timeSecEpoch;
     long timeMillisAdjust;
     bool unixtimeFound;
@@ -100,6 +104,9 @@ public:
     void setTimeZone(int tz);
     int getTimeZone();
     bool timeFailed();
+    void setDSTOverriden(bool active);
+    bool isDSTOverriden();
+    bool isDstOn();
 };
 
 class TimeServer {
@@ -123,3 +130,5 @@ public:
     bool getNTPTime(TimeStatus &timeStatus, const char *server, unsigned int timeoutMs);
     const char *getMessageStr(char *buffer);
 };
+
+#endif

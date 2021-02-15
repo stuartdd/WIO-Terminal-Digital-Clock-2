@@ -55,7 +55,7 @@ void Properties::writeNum(const char *propName, const long propValue) {
 }
 
 void Properties::writeBool(const char *propName, const bool propValue) {
-    writeFileSD(propName, propValue ? "0" : "1");
+    writeFileSD(propName, propValue ? "1" : "0");
 }
 
 //
@@ -106,7 +106,7 @@ int Properties::readFileLineSD(char *buffer, const char *fileName) {
         fil.close();
         return index + 1;
     } else {
-                    Serial.println(String(fileNameBuff) + ":" +String(fil) );
+        Serial.println(String(fileNameBuff) + ":" + String(fil));
         //
         // Return 0 to indicate that no reading was possible.
         //

@@ -1,3 +1,6 @@
+#ifndef __WIO_LOG_CPP__
+#define __WIO_LOG_CPP__
+
 #include <Arduino.h>
 
 #include "Free_Fonts.h"
@@ -40,3 +43,5 @@ public:
     bool getEchoSerial();
     bool getRequiresRedraw();
 };
+
+#endif

@@ -1,7 +1,13 @@
 // #define TEST_SMALL__ X
 //
 // pyserial-miniterm /dev/ttyACM0 115200 --exit-char 32
+// 320x240
 //
+//
+// Uncomment the next line to build in TEST mode
+//#define TEST
+//
+
 #include "BackLight.hpp"
 #include "Free_Fonts.h"
 #include "SAMCrashMonitor.h"
@@ -17,14 +23,27 @@
 #define WIFI_TIME_OUT_SHORT 10000
 #define WIFI_TIME_OUT_LONG 30000
 #define BACK_LIGHT_LO_THRESH 3
-#define BACK_LIGHT_HI_THRESH 4
+#define BACK_LIGHT_HI_THRESH 3
 
 #define TIME_SYNC_RETRY_TIME 15000
-//#define TIME_SYNC_TIME 30000
+#ifdef TEST
+#define TIME_SYNC_TIME 30000
+#else
 #define TIME_SYNC_TIME 3600000
+#endif
 
 #define ICON_WIFI_X_POS 30
 #define ICON_WIFI_Y_POS 105
+#define DATE_BLOCK_Y_POS 195
+#define DATE_BLOCK_W 240
+#define DATE_BLOCK_H 85
+#define STATUS_BLOCK_Y_POS 280
+#define STATUS_BLOCK_W 240
+#define STATUS_BLOCK_H 40
+
+#define DST_OVERRIDE_PROPERTY_NAME "overrideDST"
+#define SSID_PROPERTY_NAME "ssid"
+#define PW_PROPERTY_NAME "pw"
 
 enum DisplayModes {
     DM_CLOCK,     // Primary display mode is the CLOCK
@@ -42,6 +61,7 @@ static Properties properties = Properties();
 static ClockDisplaySmall segSmallHHMM = ClockDisplaySmall();
 static ClockDisplaySmall segSmallSS = ClockDisplaySmall();
 static IconManager wifiIcon = IconManager();
+static IconManager dstIcon = IconManager();
 
 const char* ntpServerName = "time.nist.gov";
 const int offsets[]{3, 0, -5, 3};
@@ -65,15 +85,20 @@ long mainLooptemp = 0;
 bool useNTPForTime = false;
 bool lowLightDisplay = false;
 bool colonOn = true;
-bool displayStats = false;
+
 bool buttonANotPressed = true;
 bool buttonBNotPressed = true;
 bool buttonCNotPressed = true;
+bool buttonMiddleNotPressed = true;
 int count = 0;
 int currentDayOfWeek = -1;
 int currentClockColor = -1;
 int syncTimeTimeout = SYNC_TIME_OUT_SHORT;
-
+#ifdef TEST
+bool displayStats = true;
+#else
+bool displayStats = false;
+#endif
 char message[50];
 char strTime[40];
 char ipStr[20];
@@ -112,7 +137,7 @@ void setup() {
     // Set up the Display so we can see the logger
     //
     dispBuffer.begin();
-    backLight.init(WIO_LIGHT, 5, 10, 500);
+    backLight.init(WIO_LIGHT, 3, 10, 500);
     //
     // Display the log page
     //
@@ -122,14 +147,6 @@ void setup() {
     // Set up the log
     //
     logger.init(dispBuffer, logFgColor, logBgColor);
-    bool showTheClock = true;
-    if (digitalRead(WIO_KEY_A) == LOW) {
-        showTheClock = false;
-        logger.logLine("Log display:");
-    } else {
-        logger.logLine("Clock display:");
-    }
-
     //
     // Logger needs to know if it can use the Serial port.
     //
@@ -145,17 +162,19 @@ void setup() {
     // Connect to the SD card. If not then notify and freeze!
     //
     if (!SD.begin(SDCARD_SS_PIN, SDCARD_SPI)) {
-        freeze("SD init failed!");
+        freeze("SD init failed!", false);
     }
     //
     // Get the SSID and the password from the SD card.
     //   If either is not there then notify and freeze!
     //
-    if (properties.readString(ssid, "ssid", "") == 0) {
-        freeze("prop 'ssid' not found");
+    if (properties.readString(ssid, SSID_PROPERTY_NAME, "") == 0) {
+        sprintf(message, "prop '%s' not found", SSID_PROPERTY_NAME);
+        freeze(message, false);
     }
-    if (properties.readString(password, "pw", "") == 0) {
-        freeze("prop 'pw' not found");
+    if (properties.readString(password, PW_PROPERTY_NAME, "") == 0) {
+        sprintf(message, "prop '%s' not found", PW_PROPERTY_NAME);
+        freeze(message, false);
     }
     //
     // Check that the SSID is reachable.
@@ -164,7 +183,7 @@ void setup() {
     logger.logLine("Checking SSID:" + String(ssid));
     if (!timeServer.testForSsid(ssid)) {
         sprintf(message, "SSID '%s' not found", ssid);
-        freeze(message);
+        freeze(message, true);
     }
     logger.logLine("Found SSID:" + String(ssid));
     //
@@ -183,7 +202,7 @@ void setup() {
     logger.logLine("Connecting to:" + String(ssid));
     timeServer.connect(ssid, password, WIFI_TIME_OUT_LONG);
     if (timeServer.isNotConnected()) {
-        freeze(timeServer.getMessageStr(message));
+        freeze(timeServer.getMessageStr(message), true);
     }
     logger.logLine(timeServer.getMessageStr(message));
     logger.setEchoToSerial(Serial);
@@ -202,27 +221,28 @@ void setup() {
             // If NTP is not there then give up!
             // This should cause the watchdog to reset the device.
             //
-            freeze(timeStatus.getMessageStr(message));
+            freeze(timeStatus.getMessageStr(message), true);
         }
     }
     logger.logLine(timeStatus.getMessageStr(message));
+
+    timeStatus.setDSTOverriden(properties.readBool(DST_OVERRIDE_PROPERTY_NAME));
+    logger.logLine("Override DST is " + String(timeStatus.isDSTOverriden()));
     //
     // Init the seven segment displays
     //
     segSmallHHMM.init(dispBuffer, 10, 10, getClockColor(), segOffFgColor, 5, offsets);
     segSmallSS.init(dispBuffer, 115, 105, getClockColor(), segOffFgColor, 2, offsets);
-    wifiIcon.init(dispBuffer, wifi_icon_bits, ICON_WIFI_X_POS, ICON_WIFI_Y_POS, wifi_icon_width, wifi_icon_height, bgColor);
+    dstIcon.init(dispBuffer, dst_icon_bits, ICON_WIFI_X_POS + (wifi_icon_width - dst_icon_width), ICON_WIFI_Y_POS + (wifi_icon_height - dst_icon_height), dst_icon_width, dst_icon_height, TFT_RED, bgColor);
+    wifiIcon.init(dispBuffer, wifi_icon_bits, ICON_WIFI_X_POS, ICON_WIFI_Y_POS, wifi_icon_width, wifi_icon_height, TFT_RED, bgColor);
+    wifiIcon.setOverlay(&dstIcon);
 
-    int timeout = SAMCrashMonitor::enableWatchdog(15000);
+    int timeout = SAMCrashMonitor::enableWatchdog(20000);
     logger.logLine("Watchdog is " + String(timeout) + "ms");
-
     //
     // Display the clock face.
     //
-    if (showTheClock) {
-        setDisplayMode(DM_CLOCK);
-    }
-
+    setDisplayMode(DM_CLOCK);
     //
     // Set time for 'time sync' in the main loop.
     //
@@ -234,6 +254,7 @@ void loop() {
     mainLoopStart = millisNow;
 
     SAMCrashMonitor::iAmAlive();
+
     backLight.update();
     //
     // Call millis() once to get the time at the start of the loop.
@@ -259,7 +280,12 @@ void loop() {
         if (digitalRead(WIO_KEY_B) == LOW) {
             if (buttonBNotPressed) {
                 buttonBNotPressed = false;
+                bool overriden = !timeStatus.isDSTOverriden();
+                properties.writeBool(DST_OVERRIDE_PROPERTY_NAME, overriden);
+                timeStatus.setDSTOverriden(overriden);
+                logger.logLine("Override DST is now " + String(overriden));
                 mainLoopMillis = 0;
+                updateDstIcon();
             }
         } else {
             buttonBNotPressed = true;
@@ -268,12 +294,23 @@ void loop() {
         if (digitalRead(WIO_KEY_C) == LOW) {
             if (buttonCNotPressed) {
                 buttonCNotPressed = false;
-                displayStats = !displayStats;
-                currentMode = DM_LOG;
-                setDisplayMode(DM_CLOCK);
+                backLight.setFullBackLightFor(10000);
             }
         } else {
             buttonCNotPressed = true;
+        }
+
+        if (digitalRead(WIO_5S_PRESS) == LOW) {
+            if (buttonMiddleNotPressed) {
+                buttonMiddleNotPressed = false;
+                displayStats = !displayStats;
+                if (currentMode == DM_CLOCK) {
+                    currentMode = DM_LOG;
+                    setDisplayMode(DM_CLOCK);
+                }
+            }
+        } else {
+            buttonMiddleNotPressed = true;
         }
     }
 
@@ -282,7 +319,7 @@ void loop() {
         // Time to synchronise with the time servers
         //
         timerSyncTime = millisNow + TIME_SYNC_TIME;
-        wifiIcon.draw(iconBusyColor);
+        wifiIcon.drawWithColor(iconBusyColor);
 
         logger.setEchoToSerial(Serial);
         logger.logSameLine(String(WiFi.status()) + ":TIME:" + String(timeStatus.getTimeStr(message, TF_HHMMSS)));
@@ -291,7 +328,7 @@ void loop() {
         //    Re-connect.
         //
         if (timeServer.isNotConnected()) {
-            wifiIcon.draw(iconConnectColor);
+            wifiIcon.drawWithColor(iconConnectColor);
             logger.logLine("Reconnecting:" + String(timeStatus.getTimeStr(message, TF_HHMMSS)));
             //
             // Connect.
@@ -304,7 +341,7 @@ void loop() {
         // We have a time so we can carry on displaying it.
         //
         if (timeServer.isNotConnected()) {
-            wifiIcon.draw(iconFailColor);
+            wifiIcon.drawWithColor(iconFailColor);
             logger.logLine(timeServer.getMessageStr(message));
             timerSyncTime = millis() + TIME_SYNC_RETRY_TIME;
         } else {
@@ -322,11 +359,11 @@ void loop() {
                 useNTPForTime = true;
                 syncTimeTimeout = SYNC_TIME_OUT_LONG;
                 timerSyncTime = millis() + TIME_SYNC_RETRY_TIME;
-                wifiIcon.draw(iconFailColor);
+                wifiIcon.drawWithColor(iconFailColor);
             } else {
                 useNTPForTime = false;
                 syncTimeTimeout = SYNC_TIME_OUT_SHORT;
-                wifiIcon.draw(getClockColor());
+                wifiIcon.drawWithColor(getClockColor());
             }
             logger.logLine(timeStatus.getMessageStr(message));
         }
@@ -356,18 +393,22 @@ void loop() {
 
             segSmallSS.draw();
             segSmallHHMM.draw();
-            wifiIcon.draw(timeServer.isNotConnected() ? iconConnectColor : currentClockColor);
+            updateDstIcon();
+            wifiIcon.drawWithColor(timeServer.isNotConnected() ? iconConnectColor : currentClockColor);
 
             if (currentDayOfWeek != timeStatus.dayOfWeek) {
                 currentDayOfWeek = timeStatus.dayOfWeek;
+                dispBuffer.fillRect(0, DATE_BLOCK_Y_POS, DATE_BLOCK_W, DATE_BLOCK_H, bgColor);
                 dispBuffer.setTextColor(currentClockColor, bgColor);
-                dispBuffer.drawString(timeStatus.getDayOfWeekStr(), 20, 200);
-                dispBuffer.drawString(timeStatus.getMonthStr(), 20, 245);
-                dispBuffer.drawString(timeStatus.getDayOfMonthStr(message), 100, 245);
+                dispBuffer.drawString(timeStatus.getDayOfWeekStr(), 20, DATE_BLOCK_Y_POS + 5);
+                dispBuffer.drawString(timeStatus.getMonthStr(), 20, DATE_BLOCK_Y_POS + 45);
+                dispBuffer.drawString(timeStatus.getDayOfMonthStr(message), 100, DATE_BLOCK_Y_POS + 45);
             }
             if (displayStats) {
+                dispBuffer.setFreeFont(FF23);
                 dispBuffer.setTextColor(logFgColor, bgColor);
-                dispBuffer.drawString(fmt2(backLight.getAverage()) + "," + fmt3(mainLoopMillis) + "," + String((timerSyncTime - millis()) / 1000) + "    ", 5, 285);
+                dispBuffer.fillRect(0, STATUS_BLOCK_Y_POS, STATUS_BLOCK_W, STATUS_BLOCK_H, bgColor);
+                dispBuffer.drawString(String(backLight.getAverage()) + "|" + String(mainLoopMillis) + "|" + String((timerSyncTime - millis()) / 1000), 5, STATUS_BLOCK_Y_POS + 3);
             }
         }
         if (currentMode == DM_LOG) {
@@ -380,23 +421,6 @@ void loop() {
         mainLoopMillis = mainLooptemp;
     }
 }  // END loop
-
-String fmt2(long num) {
-    if (num < 10) {
-        return String(num) + " ";
-    }
-    return String(num);
-}
-
-String fmt3(long num) {
-    if (num < 10) {
-        return String(num) + "  ";
-    }
-    if (num < 100) {
-        return String(num) + "   ";
-    }
-    return String(num);
-}
 
 void setDisplayMode(DisplayModes newMode) {
     if (currentMode != newMode) {
@@ -421,14 +445,32 @@ void setDisplayMode(DisplayModes newMode) {
     }
 }
 
-void freeze(const char* msg) {
+void freeze(const char* msg, bool restart) {
     setDisplayMode(DM_LOG);
     logger.setEchoToSerial(Serial);
     logger.logLine(String(msg));
-    int timeout = SAMCrashMonitor::enableWatchdog(10000);
-    logger.logLine("Reboot in " + String(timeout) + "ms");
+    if (restart) {
+        int timeout = SAMCrashMonitor::enableWatchdog(20000);
+        logger.logLine("Reboot in " + String(timeout) + "ms");
+    } else {
+        logger.logLine("HALTED:");
+    }
     while (1) {
     }
+}
+
+void updateDstIcon() {
+    if (timeStatus.isDSTOverriden()) {
+        dstIcon.setColor(TFT_RED);
+        dstIcon.setVisible(true);
+        return;
+    }
+    if (timeStatus.isDstOn()) {
+        dstIcon.setColor(TFT_YELLOW);
+        dstIcon.setVisible(true);
+        return;
+    }
+    dstIcon.setVisible(false);
 }
 
 int getClockColor() {

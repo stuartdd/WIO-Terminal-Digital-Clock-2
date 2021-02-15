@@ -1,7 +1,9 @@
-
+#ifndef __WIO_PROPERTIES_SSD_CPP__
+#define __WIO_PROPERTIES_SSD_CPP__
 
 #include <SPI.h>
 #include <Seeed_FS.h>
+
 #include "SD/Seeed_SD.h"
 
 #define PROP_FILE_BUFF_LEN 40
@@ -30,3 +32,5 @@ public:
     bool initFailed();
     char *getDataBuffer();
 };
+
+#endif
