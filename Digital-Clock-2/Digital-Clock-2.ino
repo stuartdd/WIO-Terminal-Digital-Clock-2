@@ -32,18 +32,21 @@
 #define TIME_SYNC_TIME 3600000
 #endif
 
+#define ICON_BULB_X_POS 30
+#define ICON_BULB_Y_POS 160
 #define ICON_WIFI_X_POS 30
 #define ICON_WIFI_Y_POS 105
-#define DATE_BLOCK_Y_POS 195
+#define DATE_BLOCK_Y_POS 240
 #define DATE_BLOCK_W 240
-#define DATE_BLOCK_H 85
-#define STATUS_BLOCK_Y_POS 280
+#define DATE_BLOCK_H 80
+#define STATUS_BLOCK_Y_POS 200
 #define STATUS_BLOCK_W 240
 #define STATUS_BLOCK_H 40
 
 #define DST_OVERRIDE_PROPERTY_NAME "overrideDST"
 #define SSID_PROPERTY_NAME "ssid"
 #define PW_PROPERTY_NAME "pw"
+#define BACKLIGHT_PROPERTY_NAME "backlight"
 
 enum DisplayModes {
     DM_CLOCK,     // Primary display mode is the CLOCK
@@ -62,6 +65,7 @@ static ClockDisplaySmall segSmallHHMM = ClockDisplaySmall();
 static ClockDisplaySmall segSmallSS = ClockDisplaySmall();
 static IconManager wifiIcon = IconManager();
 static IconManager dstIcon = IconManager();
+static IconManager bulbIcon = IconManager();
 
 const char* ntpServerName = "time.nist.gov";
 const int offsets[]{3, 0, -5, 3};
@@ -69,11 +73,13 @@ const int logBgColor = dispBuffer.color565(0, 0, 255);
 const int logFgColor = dispBuffer.color565(255, 255, 255);
 const int bgColor = dispBuffer.color565(0, 0, 0);
 const int segOffFgColor = dispBuffer.color565(0, 0, 50);
-const int fgColorHi = dispBuffer.color565(0, 150, 0);
+const int fgColorHi = dispBuffer.color565(0, 180, 0);
 const int fgColorLo = dispBuffer.color565(0, 100, 0);
 const int iconBusyColor = dispBuffer.color565(255, 255, 0);
 const int iconConnectColor = dispBuffer.color565(0, 0, 150);
 const int iconFailColor = dispBuffer.color565(255, 0, 0);
+const int iconOffColor = dispBuffer.color565(80, 0, 0);
+const int iconOnColor = dispBuffer.color565(0, 180, 0);
 
 long millisNow = 0;
 long timerSyncTime = 0;
@@ -137,7 +143,7 @@ void setup() {
     // Set up the Display so we can see the logger
     //
     dispBuffer.begin();
-    backLight.init(WIO_LIGHT, 3, 10, 500);
+    backLight.init(WIO_LIGHT, 3, 15, 500);
     //
     // Display the log page
     //
@@ -176,6 +182,10 @@ void setup() {
         sprintf(message, "prop '%s' not found", PW_PROPERTY_NAME);
         freeze(message, false);
     }
+
+    backLight.setFullBackLightOn(properties.readBool(BACKLIGHT_PROPERTY_NAME, false));
+    logger.logLine("Backlight is full " + String(backLight.isFullBackLightOn() ? "YES" : "NO"));
+
     //
     // Check that the SSID is reachable.
     //  if not notify and freeze!
@@ -226,13 +236,14 @@ void setup() {
     }
     logger.logLine(timeStatus.getMessageStr(message));
 
-    timeStatus.setDSTOverriden(properties.readBool(DST_OVERRIDE_PROPERTY_NAME));
-    logger.logLine("Override DST is " + String(timeStatus.isDSTOverriden()));
+    timeStatus.setDSTOverriden(properties.readBool(DST_OVERRIDE_PROPERTY_NAME, false));
+    logger.logLine("Override DST is " + String(timeStatus.isDSTOverriden() ? "ON" : "OFF"));
     //
     // Init the seven segment displays
     //
     segSmallHHMM.init(dispBuffer, 10, 10, getClockColor(), segOffFgColor, 5, offsets);
     segSmallSS.init(dispBuffer, 115, 105, getClockColor(), segOffFgColor, 2, offsets);
+    bulbIcon.init(dispBuffer, bulb_icon_bits, ICON_BULB_X_POS, ICON_BULB_Y_POS + (wifi_icon_height - bulb_icon_height), bulb_icon_width, bulb_icon_height, TFT_RED, bgColor);
     dstIcon.init(dispBuffer, dst_icon_bits, ICON_WIFI_X_POS + (wifi_icon_width - dst_icon_width), ICON_WIFI_Y_POS + (wifi_icon_height - dst_icon_height), dst_icon_width, dst_icon_height, TFT_RED, bgColor);
     wifiIcon.init(dispBuffer, wifi_icon_bits, ICON_WIFI_X_POS, ICON_WIFI_Y_POS, wifi_icon_width, wifi_icon_height, TFT_RED, bgColor);
     wifiIcon.setOverlay(&dstIcon);
@@ -283,7 +294,7 @@ void loop() {
                 bool overriden = !timeStatus.isDSTOverriden();
                 properties.writeBool(DST_OVERRIDE_PROPERTY_NAME, overriden);
                 timeStatus.setDSTOverriden(overriden);
-                logger.logLine("Override DST is now " + String(overriden));
+                logger.logLine("Override DST is " + String(timeStatus.isDSTOverriden() ? "ON" : "OFF"));
                 mainLoopMillis = 0;
                 updateDstIcon();
             }
@@ -294,7 +305,9 @@ void loop() {
         if (digitalRead(WIO_KEY_C) == LOW) {
             if (buttonCNotPressed) {
                 buttonCNotPressed = false;
-                backLight.setFullBackLightFor(10000);
+                backLight.toggleFullBackLight();
+                properties.writeBool(BACKLIGHT_PROPERTY_NAME, backLight.isFullBackLightOn());
+                logger.logLine("Backlight is full " + String(backLight.isFullBackLightOn() ? "YES" : "NO"));
             }
         } else {
             buttonCNotPressed = true;
@@ -393,9 +406,6 @@ void loop() {
 
             segSmallSS.draw();
             segSmallHHMM.draw();
-            updateDstIcon();
-            wifiIcon.drawWithColor(timeServer.isNotConnected() ? iconConnectColor : currentClockColor);
-
             if (currentDayOfWeek != timeStatus.dayOfWeek) {
                 currentDayOfWeek = timeStatus.dayOfWeek;
                 dispBuffer.fillRect(0, DATE_BLOCK_Y_POS, DATE_BLOCK_W, DATE_BLOCK_H, bgColor);
@@ -404,6 +414,9 @@ void loop() {
                 dispBuffer.drawString(timeStatus.getMonthStr(), 20, DATE_BLOCK_Y_POS + 45);
                 dispBuffer.drawString(timeStatus.getDayOfMonthStr(message), 100, DATE_BLOCK_Y_POS + 45);
             }
+            updateDstIcon();
+            wifiIcon.drawWithColor(timeServer.isNotConnected() ? iconConnectColor : currentClockColor);
+            bulbIcon.drawWithColor(backLight.isFullBackLightOn() ? currentClockColor : iconOffColor);
             if (displayStats) {
                 dispBuffer.setFreeFont(FF23);
                 dispBuffer.setTextColor(logFgColor, bgColor);
@@ -437,6 +450,7 @@ void setDisplayMode(DisplayModes newMode) {
             segSmallHHMM.invalidate();
             segSmallSS.invalidate();
             wifiIcon.invalidate();
+            bulbIcon.invalidate();
             currentDayOfWeek = -1;
             mainLoopMillis = 0;
             currentClockColor = TFT_BLACK;

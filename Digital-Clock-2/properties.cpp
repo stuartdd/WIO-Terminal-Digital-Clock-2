@@ -18,8 +18,8 @@ int Properties::readString(char *buffer, const char *propName, const char *defau
     return count;
 }
 
-bool Properties::readBool(const char *propName) {
-    long i = readNum(propName, 1);
+bool Properties::readBool(const char *propName, bool defaultValue) {
+    long i = readNum(propName, defaultValue);
     return (i != 0);
 }
 

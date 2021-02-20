@@ -7,18 +7,17 @@
 
 class BackLight {
 private:
+    LCDBackLight backLight;
     unsigned int analogPin;
     unsigned long delayMs;
     unsigned long nextSampleMs;
-    unsigned long timeClearFullBacklight;
+    bool fullBacklightOn = false;
 
-    LCDBackLight backLight;
-    int lightAverages[LIGHT_SAMPLES];  // Recorded list of light levels
-    int lightAveragesPos = 0;          // The position in lightAverages for the next reading
     int average;
     int base;
     int cap;
-    bool fullBacklight = false;
+    int lightAverages[LIGHT_SAMPLES];  // Recorded list of light levels
+    int lightAveragesPos = 0;          // The position in lightAverages for the next reading
 
 public:
     BackLight() {
@@ -30,21 +29,24 @@ public:
         return average;
     }
 
-    void setFullBackLightFor(long ms) {
-        fullBacklight = true;
-        timeClearFullBacklight = millis() + ms;
+    void toggleFullBackLight() {
+        fullBacklightOn = !fullBacklightOn;
+    }
+
+    void setFullBackLightOn(bool isOn) {
+        fullBacklightOn = isOn;
+    }
+
+    bool isFullBackLightOn() {
+        return fullBacklightOn;
     }
 
     void update() {
         if (millis() > nextSampleMs) {
-            nextSampleMs = millis() + delayMs;
-
-            if (fullBacklight) {
+            if (fullBacklightOn) {
                 backLight.setBrightness(cap);
-                if (millis() > timeClearFullBacklight) {
-                    fullBacklight = false;
-                }
             } else {
+                nextSampleMs = millis() + delayMs;
                 lightAverages[lightAveragesPos] = analogRead(analogPin);
                 lightAveragesPos++;
                 if (lightAveragesPos >= LIGHT_SAMPLES) {
@@ -84,6 +86,7 @@ public:
         }
         nextSampleMs = 0;
         average = 100;
+        fullBacklightOn = false;
         update();
     }
 };

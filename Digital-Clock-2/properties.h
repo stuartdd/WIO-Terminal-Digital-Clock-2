@@ -25,7 +25,7 @@ public:
     ~Properties();
     int readString(char *buffer, const char *propName, const char *defaultValue);
     long readNum(const char *propName, int defaultValue);
-    bool readBool(const char *propName);
+    bool readBool(const char *propName, bool defaultValue);
     void writeString(const char *propName, const char *propValue);
     void writeNum(const char *propName, const long propValue);
     void writeBool(const char *propName, const bool propValue);
